@@ -1,0 +1,29 @@
+# Default: normalize line endings to LF on check-in
+* text=auto eol=lf
+
+# Shell scripts must always use LF (for FreeBSD/Linux)
+*.sh text eol=lf
+
+# Windows batch files must always use CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Python files: LF
+*.py text eol=lf
+
+# Config / text files: LF
+*.md text eol=lf
+*.conf text eol=lf
+*.ini text eol=lf
+*.env text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Binary files: no line ending conversion
+*.db binary
+*.exe binary
+*.png binary
+*.jpg binary
+*.ico binary

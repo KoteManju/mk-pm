@@ -180,7 +180,7 @@ class SettingsWidget(QWidget):
         
         # App info
         app_info = QLabel("""
-        <h3>ProjectFlow - Jira Style Project Management</h3>
+        <h3>Karyaradhane - Project Management</h3>
         <p><b>Version:</b> 1.0.0</p>
         <p><b>Build:</b> 2024.12.29</p>
         <p><b>Technology Stack:</b></p>

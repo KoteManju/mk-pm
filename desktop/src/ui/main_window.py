@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         self.api_client = api_client
         self.logged_in = False
         
-        self.setWindowTitle("Project Management - Jira Style")
+        self.setWindowTitle("Karyaradhane")
         self.setGeometry(100, 100, 1400, 900)
         
         # Set modern styling

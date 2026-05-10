@@ -94,9 +94,12 @@ class ProjectCreationDialog(QDialog):
                 padding: 8px;
                 font-size: 14px;
                 background-color: white;
+                color: #172b4d;
             }
             QLineEdit:focus, QTextEdit:focus {
                 border-color: #0052CC;
+                background-color: white;
+                color: #172b4d;
             }
             QPushButton {
                 background-color: #0052CC;

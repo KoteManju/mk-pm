@@ -23,11 +23,11 @@ class DashboardWidget(QWidget):
         # Header with title and refresh button
         header_layout = QHBoxLayout()
         
-        title_label = QLabel("Dashboard")
+        title_label = QLabel("📊 Karyaradhane Dashboard")
         title_label.setStyleSheet("""
-            font-size: 28px;
-            font-weight: bold;
-            color: #333;
+            font-size: 32px;
+            font-weight: 700;
+            color: #172b4d;
             margin-bottom: 10px;
         """)
         header_layout.addWidget(title_label)

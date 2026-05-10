@@ -9,7 +9,7 @@ class TaskCreationDialog(QDialog):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self.setWindowTitle("Create Issue - ProjectFlow")
+        self.setWindowTitle("Create Issue - Karyaradhane")
         self.setFixedSize(600, 700)
         self.setStyleSheet("""
             QDialog {
@@ -46,10 +46,12 @@ class TaskCreationDialog(QDialog):
                 padding: 8px 12px;
                 font-size: 14px;
                 background-color: #fafbfc;
+                color: #172b4d;
             }
             QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus {
                 border-color: #0052cc;
                 background-color: white;
+                color: #172b4d;
                 outline: none;
             }
             QPushButton {
@@ -124,7 +126,7 @@ class TaskCreationDialog(QDialog):
         # Issue Type
         frame_layout.addWidget(QLabel("Issue Type *"))
         self.issue_type_combo = QComboBox()
-        self.issue_type_combo.addItems(["📋 Task", "🐛 Bug", "📈 Story", "⚡ Epic"])
+        self.issue_type_combo.addItems(["📋 Karya", "🐛 Bug", "📈 Katha", "⚡ Purana"])
         frame_layout.addWidget(self.issue_type_combo)
         
         # Summary (Title)
