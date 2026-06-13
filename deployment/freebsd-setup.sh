@@ -119,7 +119,9 @@ python migrate_attachments.py || true
 
 info "Creating upload directory..."
 mkdir -p "$BACKEND_DIR/uploads"
-sudo chown -R www:www "$BACKEND_DIR/uploads" 2>/dev/null || sudo chown -R www "$BACKEND_DIR/uploads"
+sudo chown -R www:www "$BACKEND_DIR" 2>/dev/null || sudo chown -R www "$BACKEND_DIR"
+sudo chmod -R a+rX "$BACKEND_DIR"
+sudo chmod a+r "$BACKEND_DIR/.env" 2>/dev/null || true
 
 info "Installing supervisor and nginx configs..."
 sudo mkdir -p /usr/local/etc/supervisord.d
@@ -133,10 +135,14 @@ sudo chown www:www /var/log/karyaradhane.out.log /var/log/karyaradhane.err.log 2
 sudo service supervisord start 2>/dev/null || sudo service supervisord restart
 sudo supervisorctl reread
 sudo supervisorctl update
-sudo supervisorctl restart karyaradhane || sudo supervisorctl start karyaradhane
+sudo supervisorctl start karyaradhane 2>/dev/null || sudo supervisorctl restart karyaradhane 2>/dev/null || true
+sleep 3
+if ! sudo supervisorctl status karyaradhane 2>/dev/null | grep -q RUNNING; then
+    warn "Supervisor app not running. Check: sudo tail -30 /var/log/karyaradhane.err.log"
+fi
 
 sudo nginx -t
-sudo service nginx restart
+sudo service nginx restart || sudo service nginx start
 
 info "Running verification checks..."
 sleep 3
