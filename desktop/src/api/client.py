@@ -1,11 +1,14 @@
 import requests
+import os
+import mimetypes
 from typing import Optional, Dict, List, Any
-import json
 
 class APIClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.token = None
+        self.current_user = None
+        self.last_error = None
         self.session = requests.Session()
     
     def get_headers(self) -> Dict[str, str]:
@@ -26,7 +29,7 @@ class APIClient:
             }
             response = requests.post(
                 f"{self.base_url}/api/auth/token",
-                data=data,  # Form data for OAuth2
+                data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=10
             )
@@ -38,6 +41,7 @@ class APIClient:
                 result = response.json()
                 self.token = result.get("access_token")
                 print(f"Login successful, token: {self.token[:20]}..." if self.token else "No token received")
+                self.current_user = self.get_current_user()
                 return True
             else:
                 print(f"Login failed with status: {response.status_code}, response: {response.text}")
@@ -78,6 +82,19 @@ class APIClient:
         except Exception as e:
             print(f"Get current user error: {e}")
         return None
+    
+    def get_users(self) -> List[Dict[str, Any]]:
+        """Get all users for assignee selection"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/users/",
+                headers=self.get_headers()
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"Get users error: {e}")
+        return []
     
     def get_projects(self) -> List[Dict[str, Any]]:
         """Get all projects"""
@@ -125,8 +142,8 @@ class APIClient:
         return []
     
     def create_task(self, title: str, description: str = "", project_id: Optional[int] = None,
-                   priority: str = "medium", status: str = "todo", assignee_id: Optional[int] = None,
-                   due_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                   priority: str = "medium", status: str = "todo", assignee_ids: Optional[List[int]] = None,
+                   assignee_emails: Optional[List[str]] = None, due_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Create a new task with detailed information"""
         try:
             # Get a default project if none specified
@@ -148,10 +165,10 @@ class APIClient:
                 "description": description,
                 "priority": priority,
                 "status": status,
-                "project_id": project_id
+                "project_id": project_id,
+                "assignee_ids": assignee_ids or [],
+                "assignee_emails": assignee_emails or [],
             }
-            if assignee_id:
-                data["assignee_id"] = assignee_id
             if due_date:
                 data["due_date"] = due_date
             
@@ -176,19 +193,145 @@ class APIClient:
             traceback.print_exc()
         return None
     
-    def update_task_status(self, task_id: int, status: str) -> Optional[Dict[str, Any]]:
-        """Update task status"""
+    def get_task(self, task_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single task with assignees"""
         try:
-            data = {
-                "status": status
-            }
+            response = requests.get(
+                f"{self.base_url}/api/tasks/{task_id}",
+                headers=self.get_headers()
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"Get task error: {e}")
+        return None
+    
+    def update_task(self, task_id: int, **fields) -> Optional[Dict[str, Any]]:
+        """Update task fields"""
+        try:
+            data = {}
+            for key, value in fields.items():
+                if value is not None or key == "assignee_emails":
+                    data[key] = value
+            headers = self.get_headers() if self.token else {"Content-Type": "application/json"}
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+                headers["Content-Type"] = "application/json"
             response = requests.put(
                 f"{self.base_url}/api/tasks/{task_id}",
                 json=data,
+                headers=headers,
+            )
+            if response.status_code == 200:
+                return response.json()
+            self.last_error = response.text
+            print(f"Update task failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Update task error: {e}")
+        return None
+    
+    def get_task_comments(self, task_id: int) -> List[Dict[str, Any]]:
+        """Get comments for a task"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/tasks/{task_id}/comments",
                 headers=self.get_headers()
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"Get task comments error: {e}")
+        return []
+    
+    def post_task_comment(
+        self,
+        task_id: int,
+        body: str,
+        file_paths: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Post a comment on a task, optionally with image attachments."""
+        url = f"{self.base_url}/api/tasks/{task_id}/comments"
+        file_handles = []
+        self.last_error = None
+
+        try:
+            headers = {}
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+
+            data = {"body": body or ""}
+            files = []
+            for path in file_paths or []:
+                if not os.path.exists(path):
+                    self.last_error = f"File not found: {path}"
+                    return None
+                mime_type = mimetypes.guess_type(path)[0] or "image/png"
+                handle = open(path, "rb")
+                file_handles.append(handle)
+                files.append(("files", (os.path.basename(path), handle, mime_type)))
+
+            # Always use multipart so image uploads work with the backend API
+            response = requests.post(
+                url,
+                data=data,
+                files=files if files else [("files", ("", b"", "application/octet-stream"))],
+                headers=headers,
+                timeout=60,
+            )
+
+            if response.status_code == 201:
+                return response.json()
+
+            self.last_error = response.text
+            print(f"Post comment failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Post task comment error: {e}")
+        finally:
+            for handle in file_handles:
+                handle.close()
+        return None
+    
+    def get_attachment_url(self, attachment_id: int) -> str:
+        return f"{self.base_url}/api/tasks/attachments/{attachment_id}"
+
+    def fetch_attachment_bytes(self, attachment_id: int) -> Optional[bytes]:
+        try:
+            response = requests.get(
+                self.get_attachment_url(attachment_id),
+                headers=self.get_headers(),
+            )
+            if response.status_code == 200:
+                return response.content
+        except Exception as e:
+            print(f"Fetch attachment error: {e}")
+        return None
+
+    def update_task_status(self, task_id: int, status: str) -> Optional[Dict[str, Any]]:
+        """Update task status"""
+        try:
+            headers = {}
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+                headers["Content-Type"] = "application/json"
+            response = requests.put(
+                f"{self.base_url}/api/tasks/{task_id}",
+                json={"status": status},
+                headers=headers,
             )
             if response.status_code == 200:
                 return response.json()
         except Exception as e:
             print(f"Update task status error: {e}")
         return None
+
+    def check_backend_features(self) -> Dict[str, Any]:
+        """Check if backend supports latest features."""
+        try:
+            response = requests.get(f"{self.base_url}/health", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"Health check error: {e}")
+        return {}

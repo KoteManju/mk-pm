@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, 
                              QLineEdit, QPushButton, QLabel, QMessageBox,
                              QTextEdit, QComboBox, QFrame, QDateEdit,
-                             QScrollArea, QGridLayout, QSizePolicy)
+                             QScrollArea, QGridLayout, QSizePolicy, QListWidget, QListWidgetItem)
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QPixmap, QPainter
 
@@ -157,10 +157,11 @@ class TaskCreationDialog(QDialog):
         self.priority_combo.setCurrentIndex(2)  # Default to Medium
         details_grid.addWidget(self.priority_combo, 1, 0)
         
-        # Assignee
-        details_grid.addWidget(QLabel("Assignee"), 0, 1)
-        self.assignee_combo = QComboBox()
-        details_grid.addWidget(self.assignee_combo, 1, 1)
+        # Assignees by email
+        details_grid.addWidget(QLabel("Assignees (email)"), 0, 1)
+        self.assignee_emails_input = QLineEdit()
+        self.assignee_emails_input.setPlaceholderText("email1@gmail.com, email2@gmail.com")
+        details_grid.addWidget(self.assignee_emails_input, 1, 1)
         
         # Labels (Status)
         details_grid.addWidget(QLabel("Status"), 2, 0)
@@ -222,18 +223,30 @@ class TaskCreationDialog(QDialog):
                 # Add default option if no projects
                 self.project_combo.addItem("📁 Create new project", None)
             
-            # Load users for assignee
-            self.assignee_combo.addItem("Unassigned", None)
-            
-            # Reporter will be current logged-in user
-            self.reporter_label.setText("👤 Current User")
+            # Load users for reporter context
+            users = self.api_client.get_users()
+            if users and self.api_client.current_user:
+                current = self.api_client.current_user
+                self.reporter_label.setText(
+                    f"👤 {current.get('full_name') or current.get('username')} ({current.get('email', '')})"
+                )
             
         except Exception as e:
             print(f"Error loading data: {e}")
             import traceback
             traceback.print_exc()
             self.project_combo.addItem("📁 Default Project", None)
-            self.assignee_combo.addItem("Unassigned", None)
+    
+    def _parse_assignee_emails(self):
+        raw = self.assignee_emails_input.text().strip()
+        if not raw:
+            return []
+        emails = []
+        for part in raw.replace(";", ",").split(","):
+            email = part.strip().lower()
+            if email and "@" in email:
+                emails.append(email)
+        return emails
     
     def create_task(self):
         # Validate required fields
@@ -288,7 +301,8 @@ class TaskCreationDialog(QDialog):
                 project_id=project_id,
                 priority=priority,
                 status=status,
-                due_date=due_date
+                due_date=due_date,
+                assignee_emails=self._parse_assignee_emails(),
             )
             
             if result:

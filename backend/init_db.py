@@ -7,7 +7,7 @@ Creates tables and adds sample data for testing
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
-from app.models import Base, User, Project, Task
+from app.models import Base, User, Project, Task, TaskComment, task_assignees
 from app.core.security import get_password_hash
 import datetime
 
@@ -102,9 +102,18 @@ def init_database():
             ),
         ]
         
+        for task_data in tasks:
+            db.add(task_data)
+
+        db.commit()
+
         for task in tasks:
-            db.add(task)
-        
+            db.refresh(task)
+            if task.assignee_id:
+                assignee = db.query(User).filter(User.id == task.assignee_id).first()
+                if assignee:
+                    task.assignees.append(assignee)
+
         db.commit()
         
         print("✅ Database initialized successfully!")

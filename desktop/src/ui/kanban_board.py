@@ -3,13 +3,14 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QMessageBox, QDialog, QLineEdit, QTextEdit,
                              QComboBox, QListWidget, QListWidgetItem, QApplication)
 from PySide6.QtCore import Qt, QMimeData, QTimer
-from PySide6.QtGui import QDrag, QPixmap, QPainter, QFont
+from PySide6.QtGui import QDrag, QPixmap, QPainter, QFont, QCursor
 
 class TaskCard(QFrame):
-    def __init__(self, task_data, api_client):
+    def __init__(self, task_data, api_client, on_open=None):
         super().__init__()
         self.task_data = task_data
         self.api_client = api_client
+        self.on_open = on_open
         self.setup_ui()
     
     def setup_ui(self):
@@ -79,6 +80,19 @@ class TaskCard(QFrame):
         info_layout.addWidget(priority_label)
         
         info_layout.addStretch()
+
+        assignees = self.task_data.get("assignees") or []
+        if assignees:
+            names = []
+            for user in assignees[:3]:
+                names.append(user.get("full_name") or user.get("username"))
+            assignee_text = ", ".join(names)
+            if len(assignees) > 3:
+                assignee_text += f" +{len(assignees) - 3}"
+            assignee_label = QLabel(f"👥 {assignee_text}")
+            assignee_label.setStyleSheet("color: #0052CC; font-size: 10px;")
+            assignee_label.setWordWrap(True)
+            layout.addWidget(assignee_label)
         
         # Task ID
         task_id = QLabel(f"#{self.task_data.get('id', 'N/A')}")
@@ -87,14 +101,51 @@ class TaskCard(QFrame):
         
         layout.addLayout(info_layout)
         
+        open_hint = QLabel("Double-click to open issue")
+        open_hint.setStyleSheet("color: #97a0af; font-size: 10px;")
+        layout.addWidget(open_hint)
+
+        open_btn = QPushButton("Open issue")
+        open_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        open_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #0052CC;
+                border: none;
+                text-align: left;
+                padding: 0;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover { text-decoration: underline; }
+        """)
+        open_btn.clicked.connect(self._open_task)
+        layout.addWidget(open_btn)
+
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        for child in self.findChildren(QLabel):
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
         # Enable drag and drop
         self.setAcceptDrops(False)  # Cards don't accept drops, columns do
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     
+    def _open_task(self):
+        if self.on_open and self.task_data.get("id"):
+            self.on_open(self.task_data.get("id"))
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_start_position = event.pos()
-    
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._open_task()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def mouseMoveEvent(self, event):
         if not (event.buttons() & Qt.MouseButton.LeftButton):
             return
@@ -118,14 +169,15 @@ class TaskCard(QFrame):
         drag.setHotSpot(event.pos())
         
         # Execute drag
-        dropAction = drag.exec(Qt.DropAction.MoveAction)
+        drag.exec(Qt.DropAction.MoveAction)
 
 class KanbanColumn(QFrame):
-    def __init__(self, title, status, api_client):
+    def __init__(self, title, status, api_client, on_open_task=None):
         super().__init__()
         self.title = title
         self.status = status
         self.api_client = api_client
+        self.on_open_task = on_open_task
         self.tasks = []
         self.setup_ui()
     
@@ -191,7 +243,7 @@ class KanbanColumn(QFrame):
         layout.addWidget(scroll_area)
     
     def add_task(self, task_data):
-        task_card = TaskCard(task_data, self.api_client)
+        task_card = TaskCard(task_data, self.api_client, on_open=self.on_open_task)
         self.task_layout.addWidget(task_card)
         self.tasks.append(task_data)
         self.update_count()
@@ -346,10 +398,10 @@ class KanbanBoard(QWidget):
         columns_layout.setSpacing(10)
         
         # Create columns for each status
-        self.todo_column = KanbanColumn("📝 To Do", "todo", self.api_client)
-        self.progress_column = KanbanColumn("🔄 In Progress", "in_progress", self.api_client)
-        self.review_column = KanbanColumn("👀 Review", "review", self.api_client)
-        self.done_column = KanbanColumn("✅ Done", "done", self.api_client)
+        self.todo_column = KanbanColumn("📝 To Do", "todo", self.api_client, on_open_task=self.open_task_detail)
+        self.progress_column = KanbanColumn("🔄 In Progress", "in_progress", self.api_client, on_open_task=self.open_task_detail)
+        self.review_column = KanbanColumn("👀 Review", "review", self.api_client, on_open_task=self.open_task_detail)
+        self.done_column = KanbanColumn("✅ Done", "done", self.api_client, on_open_task=self.open_task_detail)
         
         columns_layout.addWidget(self.todo_column)
         columns_layout.addWidget(self.progress_column)
@@ -468,3 +520,15 @@ class KanbanBoard(QWidget):
                 QMessageBox.critical(self, "Error", f"Error: {str(e)}")
         elif ok:
             QMessageBox.warning(self, "Error", "Please enter a task title!")
+    
+    def open_task_detail(self, task_id):
+        """Open ticket detail dialog with assignee chat."""
+        if not task_id:
+            return
+        try:
+            from .task_detail_dialog import TaskDetailDialog
+            dialog = TaskDetailDialog(self.api_client, int(task_id), self)
+            dialog.exec()
+            self.refresh_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open issue:\n{e}")

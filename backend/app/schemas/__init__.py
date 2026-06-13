@@ -46,6 +46,16 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+
+class UserSummary(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 # Project Schemas
 class ProjectBase(BaseModel):
     name: str
@@ -76,25 +86,59 @@ class TaskBase(BaseModel):
     status: TaskStatus = TaskStatus.TODO
     priority: TaskPriority = TaskPriority.MEDIUM
     project_id: Optional[int] = None
-    assignee_id: Optional[int] = None
     due_date: Optional[datetime] = None
 
+
 class TaskCreate(TaskBase):
-    pass
+    assignee_ids: List[int] = []
+    assignee_emails: List[str] = []
+
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
-    assignee_id: Optional[int] = None
+    assignee_ids: Optional[List[int]] = None
+    assignee_emails: Optional[List[str]] = None
     due_date: Optional[datetime] = None
+
 
 class Task(TaskBase):
     id: int
+    assignee_id: Optional[int] = None
+    assignees: List[UserSummary] = []
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
+    class Config:
+        from_attributes = True
+
+
+class TaskCommentCreate(BaseModel):
+    body: str = ""
+
+
+class CommentAttachment(BaseModel):
+    id: int
+    filename: str
+    content_type: str
+    file_size: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class TaskComment(BaseModel):
+    id: int
+    task_id: int
+    author_id: int
+    body: str
+    source: str = "app"
+    created_at: datetime
+    author: Optional[UserSummary] = None
+    attachments: List[CommentAttachment] = []
+
     class Config:
         from_attributes = True
 

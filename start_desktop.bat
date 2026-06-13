@@ -6,6 +6,21 @@ echo.
 
 cd /d "%~dp0desktop"
 
+REM Try to find Python
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Python not found in PATH. Trying alternative...
+    set "PYTHON_PATH=%LOCALAPPDATA%\Programs\Python\Python311"
+    if exist "%PYTHON_PATH%\python.exe" (
+        set "PATH=%PYTHON_PATH%;%PYTHON_PATH%\Scripts;%PATH%"
+    ) else (
+        echo ERROR: Python is not installed.
+        echo Run install_dependencies.ps1 first, then try again.
+        pause
+        exit /b 1
+    )
+)
+
 echo.
 echo Make sure the backend is running on http://127.0.0.1:8000
 echo.
@@ -21,6 +36,6 @@ echo.
 echo Starting application...
 echo.
 
-"C:\Users\Mkotegar\AppData\Local\Programs\Python\Python311\python.exe" main.py
+python main.py
 
 pause

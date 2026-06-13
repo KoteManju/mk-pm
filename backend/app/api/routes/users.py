@@ -3,11 +3,16 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.security import get_password_hash
 from app.models import User as UserModel
 from app.schemas import User, UserCreate, UserUpdate
 
 router = APIRouter()
+
+@router.get("/me", response_model=User)
+def read_current_user(current_user: UserModel = Depends(get_current_user)):
+    return current_user
 
 @router.post("/", response_model=User)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):

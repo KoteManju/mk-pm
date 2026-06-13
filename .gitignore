@@ -75,6 +75,8 @@ Thumbs.db
 # Project specific
 project_management.db
 *.db-journal
+uploads/
+backend/uploads/
 health_check.py
 quick_fix.bat
 TESTING_COMPLETE.md

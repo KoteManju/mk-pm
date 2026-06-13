@@ -194,7 +194,19 @@ class MainWindow(QMainWindow):
     
     def login_success(self):
         self.logged_in = True
-        self.set_logged_in_state("admin")  # You can get actual username from API
+        current_user = self.api_client.current_user or {}
+        username = current_user.get("username") or "user"
+        self.set_logged_in_state(username)
+
+        features = self.api_client.check_backend_features()
+        if features and not features.get("attachments_enabled"):
+            QMessageBox.warning(
+                self,
+                "Backend update required",
+                "The backend server is out of date and does not support image attachments.\n\n"
+                "Close any old backend windows, then run start_backend.bat again.\n"
+                "After restart, http://127.0.0.1:8000/health should show attachments_enabled=true.",
+            )
         
         # Refresh data in all widgets
         self.dashboard_widget.refresh_data()
