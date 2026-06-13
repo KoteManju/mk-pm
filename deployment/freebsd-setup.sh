@@ -60,7 +60,12 @@ fi
 
 . "$VENV_DIR/bin/activate"
 pip install --upgrade pip
-pip install -r requirements.txt
+info "Installing Python dependencies (FreeBSD requirements)..."
+if ! pip install -r "$APP_DIR/deployment/requirements-freebsd.txt"; then
+    warn "Pip install failed; installing Rust compiler and retrying..."
+    sudo pkg install -y rust
+    pip install -r "$APP_DIR/deployment/requirements-freebsd.txt"
+fi
 
 if [ ! -f "$BACKEND_DIR/.env" ]; then
     warn "Creating .env from deployment template - edit passwords before production use."
