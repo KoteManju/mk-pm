@@ -27,6 +27,7 @@ sudo pkg update
 
 # Install PostgreSQL server FIRST (FreeBSD 15 uses PG 18; avoids pkg removing server)
 info "Installing PostgreSQL 18 server..."
+sudo pkg remove -y postgresql15-server postgresql15-client 2>/dev/null || true
 sudo pkg install -y postgresql18-server postgresql18-client
 
 info "Installing application packages..."
@@ -34,20 +35,20 @@ sudo pkg install -y python311 py311-pip py311-psycopg2 nginx py311-supervisor gi
 
 info "Enabling services..."
 sudo sysrc postgresql_enable="YES"
+sudo sysrc postgresql_data="/var/db/postgres/data18"
 sudo sysrc nginx_enable="YES"
 sudo sysrc supervisord_enable="YES"
 
-# Initialize PostgreSQL if no cluster exists yet
-if [ ! -d /var/db/postgres/data18 ] && [ ! -d /var/db/postgres/data17 ] && [ ! -d /var/db/postgres/data16 ] && [ ! -d /var/db/postgres/data15 ]; then
-    info "Initializing PostgreSQL..."
+# Initialize PostgreSQL 18 cluster if missing
+if [ ! -d /var/db/postgres/data18 ]; then
+    info "Initializing PostgreSQL 18 cluster (data18)..."
     sudo service postgresql initdb
 fi
 
-if ! sudo service postgresql status >/dev/null 2>&1; then
-    info "Starting PostgreSQL..."
-    sudo service postgresql start
-else
-    sudo service postgresql start || true
+info "Starting PostgreSQL..."
+if ! sudo service postgresql start; then
+    warn "PostgreSQL failed to start. Check: sudo tail /var/db/postgres/data18/log/*.log"
+    fail "Fix PostgreSQL before continuing."
 fi
 
 info "Preparing application directory..."
