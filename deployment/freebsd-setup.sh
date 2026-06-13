@@ -24,9 +24,13 @@ fi
 
 info "Installing system packages (FreeBSD $(freebsd-version -u))..."
 sudo pkg update
-# Python 3.11 + PostgreSQL 15 work on FreeBSD 13/14/15
-sudo pkg install -y python311 py311-pip py311-psycopg2 postgresql15-server \
-    postgresql15-client nginx py311-supervisor git curl
+
+# Install PostgreSQL server FIRST (FreeBSD 15 uses PG 18; avoids pkg removing server)
+info "Installing PostgreSQL 18 server..."
+sudo pkg install -y postgresql18-server postgresql18-client
+
+info "Installing application packages..."
+sudo pkg install -y python311 py311-pip py311-psycopg2 nginx py311-supervisor git curl
 
 info "Enabling services..."
 sudo sysrc postgresql_enable="YES"
@@ -34,11 +38,17 @@ sudo sysrc nginx_enable="YES"
 sudo sysrc supervisord_enable="YES"
 
 # Initialize PostgreSQL if no cluster exists yet
-if [ ! -d /var/db/postgres/data15 ] && [ ! -d /var/db/postgres/data16 ] && [ ! -d /var/db/postgres/data17 ]; then
+if [ ! -d /var/db/postgres/data18 ] && [ ! -d /var/db/postgres/data17 ] && [ ! -d /var/db/postgres/data16 ] && [ ! -d /var/db/postgres/data15 ]; then
     info "Initializing PostgreSQL..."
     sudo service postgresql initdb
 fi
-sudo service postgresql start
+
+if ! sudo service postgresql status >/dev/null 2>&1; then
+    info "Starting PostgreSQL..."
+    sudo service postgresql start
+else
+    sudo service postgresql start || true
+fi
 
 info "Preparing application directory..."
 sudo mkdir -p "$APP_DIR"
