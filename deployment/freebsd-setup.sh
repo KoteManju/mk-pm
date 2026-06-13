@@ -26,7 +26,7 @@ info "Installing system packages (FreeBSD $(freebsd-version -u))..."
 sudo pkg update
 # Python 3.11 + PostgreSQL 15 work on FreeBSD 13/14/15
 sudo pkg install -y python311 py311-pip py311-psycopg2 postgresql15-server \
-    postgresql15-client nginx supervisor git curl
+    postgresql15-client nginx py311-supervisor git curl
 
 info "Enabling services..."
 sudo sysrc postgresql_enable="YES"
@@ -91,6 +91,7 @@ mkdir -p "$BACKEND_DIR/uploads"
 sudo chown -R www:www "$BACKEND_DIR/uploads" 2>/dev/null || sudo chown -R www "$BACKEND_DIR/uploads"
 
 info "Installing supervisor and nginx configs..."
+sudo mkdir -p /usr/local/etc/supervisord.d
 sudo cp "$APP_DIR/deployment/supervisor.ini" /usr/local/etc/supervisord.d/karyaradhane.ini
 sudo cp "$APP_DIR/deployment/nginx.conf" /usr/local/etc/nginx/nginx.conf
 sudo mkdir -p /var/log/nginx
