@@ -1,5 +1,24 @@
 # Deploy mk-pm to FreeBSD on Google Cloud
 
+## Supported FreeBSD versions
+
+| Version | GCP image family (recommended) | Notes |
+|---------|-------------------------------|--------|
+| **FreeBSD 15.0-RELEASE** | `freebsd-15-0-amd64-ufs` | Best choice for new deployments |
+| **FreeBSD 15.0-STABLE** | List images in GCP* | Rolling STABLE snapshots; same setup script |
+| FreeBSD 14.x | `freebsd-14-3` | Also supported |
+| FreeBSD 13.x | `freebsd-13-2` | Legacy; still works |
+
+\*Do **not** use the deprecated family `freebsd-15-0` (no architecture/filesystem suffix).  
+List current images:
+
+```bash
+gcloud compute images list --project freebsd-org-cloud-dev --no-standard-images | grep 15
+```
+
+For **15.0-STABLE**, pick the latest matching family (e.g. `freebsd-15-0-stable-amd64-ufs` if listed).  
+The mk-pm app runs the same on RELEASE and STABLE — only the VM image differs.
+
 ## What gets deployed
 
 | Component | Where it runs |
@@ -33,7 +52,8 @@ Your local backend passed all checks:
    - **Machine type:** `e2-medium` (2 vCPU, 4 GB)
    - **Boot disk → Change:**
      - Public images → **FreeBSD**
-     - Version: **freebsd-13-2** (or latest 13.x)
+     - Version: **FreeBSD 15.0** (`freebsd-15-0-amd64-ufs`) — or **15.0-STABLE** if listed
+     - Filesystem: **UFS** (recommended) or ZFS (`freebsd-15-0-amd64-zfs`)
      - Size: **20 GB**
    - **Firewall:** check **Allow HTTP traffic** and **Allow HTTPS traffic**
 4. Click **Create**
@@ -47,13 +67,22 @@ Then create the VM from PowerShell:
 
 ```powershell
 gcloud config set project YOUR_PROJECT_ID
+
+# FreeBSD 15.0 RELEASE (recommended)
 gcloud compute instances create mk-pm-server `
-  --image-family=freebsd-13-2 `
+  --image-family=freebsd-15-0-amd64-ufs `
   --image-project=freebsd-org-cloud-dev `
   --machine-type=e2-medium `
   --boot-disk-size=20GB `
   --zone=us-central1-a `
   --tags=http-server,https-server
+
+# FreeBSD 15.0-STABLE (optional — list families first)
+# gcloud compute images list --project freebsd-org-cloud-dev --no-standard-images | grep -i stable
+# gcloud compute instances create mk-pm-server `
+#   --image-family=freebsd-15-0-stable-amd64-ufs `
+#   --image-project=freebsd-org-cloud-dev `
+#   ...
 ```
 
 ---

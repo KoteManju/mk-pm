@@ -22,8 +22,9 @@ if [ "$(id -u)" = "0" ]; then
     fail "Run as your normal user (with sudo), not root."
 fi
 
-info "Installing system packages..."
+info "Installing system packages (FreeBSD $(freebsd-version -u))..."
 sudo pkg update
+# Python 3.11 + PostgreSQL 15 work on FreeBSD 13/14/15
 sudo pkg install -y python311 py311-pip py311-psycopg2 postgresql15-server \
     postgresql15-client nginx supervisor git curl
 
@@ -32,7 +33,8 @@ sudo sysrc postgresql_enable="YES"
 sudo sysrc nginx_enable="YES"
 sudo sysrc supervisord_enable="YES"
 
-if [ ! -d /var/db/postgres/data16 ] && [ ! -d /var/db/postgres/data15 ]; then
+# Initialize PostgreSQL if no cluster exists yet
+if [ ! -d /var/db/postgres/data15 ] && [ ! -d /var/db/postgres/data16 ] && [ ! -d /var/db/postgres/data17 ]; then
     info "Initializing PostgreSQL..."
     sudo service postgresql initdb
 fi
