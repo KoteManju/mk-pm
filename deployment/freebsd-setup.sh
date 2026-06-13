@@ -124,8 +124,10 @@ sudo chmod -R a+rX "$BACKEND_DIR"
 sudo chmod a+r "$BACKEND_DIR/.env" 2>/dev/null || true
 
 info "Installing supervisor and nginx configs..."
-sudo mkdir -p /usr/local/etc/supervisord.d
+sudo mkdir -p /var/run /usr/local/etc/supervisord.d
+sudo cp "$APP_DIR/deployment/supervisord.conf" /usr/local/etc/supervisord.conf
 sudo cp "$APP_DIR/deployment/supervisor.ini" /usr/local/etc/supervisord.d/karyaradhane.ini
+sudo touch /var/log/supervisord.log
 sudo cp "$APP_DIR/deployment/nginx.conf" /usr/local/etc/nginx/nginx.conf
 sudo mkdir -p /var/log/nginx
 sudo touch /var/log/karyaradhane.out.log /var/log/karyaradhane.err.log
@@ -133,12 +135,15 @@ sudo chown www:www /var/log/karyaradhane.out.log /var/log/karyaradhane.err.log 2
     || sudo chown www /var/log/karyaradhane.out.log /var/log/karyaradhane.err.log
 
 sudo service supervisord start 2>/dev/null || sudo service supervisord restart
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start karyaradhane 2>/dev/null || sudo supervisorctl restart karyaradhane 2>/dev/null || true
+sleep 2
+sudo supervisorctl -c /usr/local/etc/supervisord.conf reread
+sudo supervisorctl -c /usr/local/etc/supervisord.conf update
+sudo supervisorctl -c /usr/local/etc/supervisord.conf start karyaradhane 2>/dev/null || \
+    sudo supervisorctl -c /usr/local/etc/supervisord.conf restart karyaradhane 2>/dev/null || true
 sleep 3
-if ! sudo supervisorctl status karyaradhane 2>/dev/null | grep -q RUNNING; then
-    warn "Supervisor app not running. Check: sudo tail -30 /var/log/karyaradhane.err.log"
+if ! sudo supervisorctl -c /usr/local/etc/supervisord.conf status karyaradhane 2>/dev/null | grep -q RUNNING; then
+    warn "Supervisor app not running. Run: sh $APP_DIR/deployment/fix-supervisor.sh"
+    warn "Or test manually: sudo -u www env PYTHONPATH=$BACKEND_DIR $VENV_DIR/bin/uvicorn main:app --host 127.0.0.1 --port 8000"
 fi
 
 sudo nginx -t
