@@ -16,7 +16,18 @@ if [ ! -d /var/db/postgres/data18 ]; then
 fi
 
 info "Starting PostgreSQL..."
-sudo service postgresql start
+sudo service postgresql stop 2>/dev/null || true
+for PGDATA in /var/db/postgres/data15 /var/db/postgres/data18; do
+    if [ -f "$PGDATA/postmaster.pid" ]; then
+        sudo -u postgres /usr/local/bin/pg_ctl -D "$PGDATA" stop -m fast 2>/dev/null || true
+    fi
+done
+sleep 2
+sudo mkdir -p /var/db/postgres/data18/log
+sudo chown -R postgres:postgres /var/db/postgres/data18
+if ! sudo service postgresql start; then
+    sudo -u postgres /usr/local/bin/pg_ctl -D /var/db/postgres/data18 -l /var/db/postgres/data18/log/postgresql.log start
+fi
 
 info "Creating app database and user..."
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'karyaradhane'" | grep -q 1 \

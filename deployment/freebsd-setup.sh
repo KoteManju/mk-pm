@@ -46,9 +46,24 @@ if [ ! -d /var/db/postgres/data18 ]; then
 fi
 
 info "Starting PostgreSQL..."
+sudo service postgresql stop 2>/dev/null || true
+for PGDATA in /var/db/postgres/data15 /var/db/postgres/data18; do
+    if [ -f "$PGDATA/postmaster.pid" ]; then
+        sudo -u postgres /usr/local/bin/pg_ctl -D "$PGDATA" stop -m fast 2>/dev/null || true
+    fi
+done
+sleep 2
+
 if ! sudo service postgresql start; then
-    warn "PostgreSQL failed to start. Check: sudo tail /var/db/postgres/data18/log/*.log"
-    fail "Fix PostgreSQL before continuing."
+    warn "service start failed; trying pg_ctl on data18..."
+    sudo mkdir -p /var/db/postgres/data18/log
+    sudo chown -R postgres:postgres /var/db/postgres/data18
+    if ! sudo -u postgres /usr/local/bin/pg_ctl -D /var/db/postgres/data18 -l /var/db/postgres/data18/log/postgresql.log start; then
+        warn "PostgreSQL failed to start. Check:"
+        echo "  sudo tail -30 /var/db/postgres/data18/log/postgresql.log"
+        echo "  sockstat -4 -l | grep 5432"
+        fail "Fix PostgreSQL before continuing."
+    fi
 fi
 
 info "Preparing application directory..."
