@@ -1,0 +1,4 @@
+{
+  "api_base_url": "http://YOUR_SERVER_IP",
+  "connection_timeout_seconds": 30
+}

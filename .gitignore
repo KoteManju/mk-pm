@@ -41,6 +41,9 @@ venv.bak/
 .env
 .env.local
 
+# Desktop user settings
+desktop/settings.json
+
 # IDE
 .vscode/
 .idea/

@@ -246,6 +246,13 @@ def send_email(
 
 
 def notify_assignment(db: Session, task: Task, assignee: User, assigned_by: Optional[str] = None) -> None:
+    if not assignee.email or "@" not in assignee.email:
+        print(f"Skipping assignment email for user {assignee.id}: no valid email")
+        return
+    if assignee.email.endswith("@example.com"):
+        print(f"Skipping assignment email for {assignee.email}: sample/placeholder address")
+        return
+
     subject = f"[PM-{task.id}] You were assigned: {task.title}"
     assigner = assigned_by or "Project Management"
     body = (

@@ -4,12 +4,15 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QFormLayout, QMessageBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from src.config import load_settings, save_settings
 
 class SettingsWidget(QWidget):
     def __init__(self, api_client):
         super().__init__()
         self.api_client = api_client
+        self.settings = load_settings()
         self.setup_ui()
+        self.load_settings_into_ui()
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -117,11 +120,11 @@ class SettingsWidget(QWidget):
         api_layout = QFormLayout(api_group)
         
         # API URL
-        self.api_url_input = QLineEdit("http://localhost:8000")
+        self.api_url_input = QLineEdit()
         api_layout.addRow("API Base URL:", self.api_url_input)
         
         # Connection timeout
-        self.timeout_input = QLineEdit("30")
+        self.timeout_input = QLineEdit()
         api_layout.addRow("Connection Timeout (seconds):", self.timeout_input)
         
         # Test connection button
@@ -256,6 +259,11 @@ class SettingsWidget(QWidget):
         
         parent_layout.addLayout(save_layout)
     
+    def load_settings_into_ui(self):
+        self.api_url_input.setText(self.settings["api_base_url"])
+        self.timeout_input.setText(str(self.settings["connection_timeout_seconds"]))
+        self.api_client.base_url = self.settings["api_base_url"].rstrip("/")
+
     def test_api_connection(self):
         """Test connection to the API"""
         try:
@@ -294,7 +302,18 @@ class SettingsWidget(QWidget):
     
     def save_settings(self):
         """Save user settings"""
-        # Here you would normally save to a config file
-        # For now, just show a confirmation
+        api_url = self.api_url_input.text().strip().rstrip("/")
+        try:
+            timeout = int(self.timeout_input.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, "Settings", "Connection timeout must be a number.")
+            return
+
+        self.settings["api_base_url"] = api_url
+        self.settings["connection_timeout_seconds"] = timeout
+        save_settings(self.settings)
+        self.api_client.base_url = api_url
+        self.api_url_input.setText(api_url)
+
         QMessageBox.information(self, "Settings", 
                                "✅ Settings saved successfully!")

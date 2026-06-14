@@ -5,9 +5,9 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox,
     QTextEdit, QComboBox, QFrame, QSplitter, QScrollArea, QWidget, QLineEdit,
-    QFileDialog,
+    QFileDialog, QDateEdit,
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QDate
 from PySide6.QtGui import QPixmap, QCursor
 
 
@@ -15,6 +15,8 @@ AVATAR_COLORS = [
     "#0052CC", "#5243AA", "#00875A", "#FF5630",
     "#FF991F", "#00B8D9", "#6554C0", "#36B37E",
 ]
+
+NO_DUE_DATE = QDate(2000, 1, 1)
 
 
 def _initials(name: str, username: str = "") -> str:
@@ -485,6 +487,14 @@ class TaskDetailDialog(QDialog):
         self.priority_combo.addItems(["low", "medium", "high", "urgent"])
         sidebar_layout.addWidget(self.priority_combo)
 
+        sidebar_layout.addWidget(self._sidebar_label("Due date"))
+        self.due_date_edit = QDateEdit()
+        self.due_date_edit.setCalendarPopup(True)
+        self.due_date_edit.setMinimumDate(NO_DUE_DATE)
+        self.due_date_edit.setSpecialValueText("None")
+        self.due_date_edit.setDate(NO_DUE_DATE)
+        sidebar_layout.addWidget(self.due_date_edit)
+
         sidebar_layout.addWidget(self._sidebar_label("Assignees"))
         self.assignee_count_label = QLabel("0 assignees")
         self.assignee_count_label.setStyleSheet("color: #626f86; font-size: 11px;")
@@ -722,6 +732,8 @@ class TaskDetailDialog(QDialog):
         if index >= 0:
             self.priority_combo.setCurrentIndex(index)
 
+        self._set_due_date_from_task(self.task_data.get("due_date"))
+
         self.users = self.api_client.get_users()
         self._set_assignee_emails_from_task(self.task_data.get("assignees", []))
 
@@ -870,11 +882,29 @@ class TaskDetailDialog(QDialog):
         else:
             QMessageBox.warning(self, "Error", "Failed to save assignees.")
 
+    def _set_due_date_from_task(self, due_date_value):
+        if not due_date_value:
+            self.due_date_edit.setDate(NO_DUE_DATE)
+            return
+        try:
+            normalized = str(due_date_value).replace("Z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+            self.due_date_edit.setDate(QDate(dt.year, dt.month, dt.day))
+        except (ValueError, TypeError):
+            self.due_date_edit.setDate(NO_DUE_DATE)
+
+    def _due_date_for_api(self):
+        selected = self.due_date_edit.date()
+        if selected <= NO_DUE_DATE:
+            return None
+        return selected.toString("yyyy-MM-dd") + "T12:00:00.000Z"
+
     def save_details(self):
         result = self.api_client.update_task(
             self.task_id,
             status=self.status_combo.currentData(),
             priority=self.priority_combo.currentText(),
+            due_date=self._due_date_for_api(),
         )
         if result:
             self.task_data = result
@@ -899,7 +929,12 @@ class TaskDetailDialog(QDialog):
             self.load_comments()
         else:
             error = self.api_client.last_error or "Unknown error"
-            if "422" in error or "valid dictionary" in error:
+            if "401" in error or "expired token" in error.lower():
+                error = (
+                    "Your session expired.\n\n"
+                    "Log out and log in again, then retry your comment."
+                )
+            elif "422" in error or "valid dictionary" in error:
                 error = (
                     "The backend server is out of date.\n\n"
                     "Close the backend window and restart start_backend.bat, "

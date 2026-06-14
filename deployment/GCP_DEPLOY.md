@@ -54,7 +54,7 @@ Your local backend passed all checks:
      - Public images → **FreeBSD**
      - Version: **FreeBSD 15.0** (`freebsd-15-0-amd64-ufs`) — or **15.0-STABLE** if listed
      - Filesystem: **UFS** (recommended) or ZFS (`freebsd-15-0-amd64-zfs`)
-     - Size: **20 GB**
+     - Size: **30 GB** minimum (FreeBSD 15 image requires at least 22 GB)
    - **Firewall:** check **Allow HTTP traffic** and **Allow HTTPS traffic**
 4. Click **Create**
 5. Copy the **External IP** (e.g. `34.xxx.xxx.xxx`)
@@ -73,7 +73,7 @@ gcloud compute instances create mk-pm-server `
   --image-family=freebsd-15-0-amd64-ufs `
   --image-project=freebsd-org-cloud-dev `
   --machine-type=e2-medium `
-  --boot-disk-size=20GB `
+  --boot-disk-size=30GB `
   --zone=us-central1-a `
   --tags=http-server,https-server
 
@@ -192,3 +192,53 @@ sudo service postgresql status
 2. Set a strong `SECRET_KEY`
 3. Add a domain + Let's Encrypt SSL (see `deployment/nginx.conf` HTTPS section)
 4. Never commit `backend/.env` to git
+
+---
+
+## Email notifications (assignee alerts)
+
+The desktop app uses the **server** API. Email is sent from the VM's `/opt/karyaradhane/backend/.env`, not your Windows `backend/.env`.
+
+1. On the VM, edit `.env`:
+
+```bash
+sudo ee /opt/karyaradhane/backend/.env
+```
+
+2. Set (Gmail example — use an [App Password](https://myaccount.google.com/apppasswords), not your normal password):
+
+```env
+EMAIL_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+SMTP_FROM=your@gmail.com
+SMTP_USE_TLS=true
+
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_USER=your@gmail.com
+IMAP_PASSWORD=your-16-char-app-password
+IMAP_USE_SSL=true
+```
+
+3. Restart the API and verify:
+
+```bash
+sudo supervisorctl -c /usr/local/etc/supervisord.conf restart karyaradhane
+curl http://127.0.0.1/health
+```
+
+Expect `"email_enabled":true`.
+
+4. **Assignee must have a real email** — sample users use `user@example.com` / `admin@example.com` (not deliverable). Assign by typing the person's real Gmail/work address, or update the user record in the app.
+
+5. **Re-assign the task** after enabling email (earlier assignments were skipped while email was off).
+
+6. Check logs if mail still fails:
+
+```bash
+sudo tail -50 /var/log/karyaradhane.out.log
+sudo tail -50 /var/log/karyaradhane.err.log
+```

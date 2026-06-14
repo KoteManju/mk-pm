@@ -9,8 +9,21 @@ class APIClient:
         self.token = None
         self.current_user = None
         self.last_error = None
+        self._username = None
+        self._password = None
         self.session = requests.Session()
     
+    def clear_auth(self) -> None:
+        self.token = None
+        self.current_user = None
+        self._username = None
+        self._password = None
+
+    def refresh_auth(self) -> bool:
+        if not self._username or not self._password:
+            return False
+        return self.login(self._username, self._password)
+
     def get_headers(self) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.token:
@@ -40,6 +53,8 @@ class APIClient:
             if response.status_code == 200:
                 result = response.json()
                 self.token = result.get("access_token")
+                self._username = username
+                self._password = password
                 print(f"Login successful, token: {self.token[:20]}..." if self.token else "No token received")
                 self.current_user = self.get_current_user()
                 return True
@@ -211,21 +226,24 @@ class APIClient:
         try:
             data = {}
             for key, value in fields.items():
-                if value is not None or key == "assignee_emails":
+                if value is not None or key in ("assignee_emails", "due_date"):
                     data[key] = value
-            headers = self.get_headers() if self.token else {"Content-Type": "application/json"}
-            if self.token:
-                headers["Authorization"] = f"Bearer {self.token}"
-                headers["Content-Type"] = "application/json"
-            response = requests.put(
-                f"{self.base_url}/api/tasks/{task_id}",
-                json=data,
-                headers=headers,
-            )
-            if response.status_code == 200:
-                return response.json()
-            self.last_error = response.text
-            print(f"Update task failed: {response.status_code} - {response.text}")
+            headers = self.get_headers()
+
+            for attempt in range(2):
+                response = requests.put(
+                    f"{self.base_url}/api/tasks/{task_id}",
+                    json=data,
+                    headers=headers,
+                )
+                if response.status_code == 200:
+                    return response.json()
+                if response.status_code == 401 and attempt == 0 and self.refresh_auth():
+                    headers = self.get_headers()
+                    continue
+                self.last_error = response.text
+                print(f"Update task failed: {response.status_code} - {response.text}")
+                break
         except Exception as e:
             self.last_error = str(e)
             print(f"Update task error: {e}")
@@ -251,6 +269,21 @@ class APIClient:
         file_paths: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Post a comment on a task, optionally with image attachments."""
+        for attempt in range(2):
+            result = self._post_task_comment_once(task_id, body, file_paths)
+            if result is not None:
+                return result
+            if attempt == 0 and self.last_error and "401" in self.last_error and self.refresh_auth():
+                continue
+            break
+        return None
+
+    def _post_task_comment_once(
+        self,
+        task_id: int,
+        body: str,
+        file_paths: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/api/tasks/{task_id}/comments"
         file_handles = []
         self.last_error = None
@@ -271,7 +304,6 @@ class APIClient:
                 file_handles.append(handle)
                 files.append(("files", (os.path.basename(path), handle, mime_type)))
 
-            # Always use multipart so image uploads work with the backend API
             response = requests.post(
                 url,
                 data=data,
@@ -311,17 +343,19 @@ class APIClient:
     def update_task_status(self, task_id: int, status: str) -> Optional[Dict[str, Any]]:
         """Update task status"""
         try:
-            headers = {}
-            if self.token:
-                headers["Authorization"] = f"Bearer {self.token}"
-                headers["Content-Type"] = "application/json"
-            response = requests.put(
-                f"{self.base_url}/api/tasks/{task_id}",
-                json={"status": status},
-                headers=headers,
-            )
-            if response.status_code == 200:
-                return response.json()
+            headers = self.get_headers()
+            for attempt in range(2):
+                response = requests.put(
+                    f"{self.base_url}/api/tasks/{task_id}",
+                    json={"status": status},
+                    headers=headers,
+                )
+                if response.status_code == 200:
+                    return response.json()
+                if response.status_code == 401 and attempt == 0 and self.refresh_auth():
+                    headers = self.get_headers()
+                    continue
+                break
         except Exception as e:
             print(f"Update task status error: {e}")
         return None

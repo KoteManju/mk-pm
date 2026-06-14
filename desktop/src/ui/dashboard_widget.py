@@ -1,8 +1,74 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QFrame, QGridLayout, QPushButton,
-                             QScrollArea, QProgressBar)
+                             QScrollArea, QProgressBar, QMessageBox)
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QPalette
+from PySide6.QtGui import QFont, QPalette, QCursor
+from datetime import datetime
+
+
+class ActivityRow(QFrame):
+    BASE_STYLE = """
+        QFrame {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 10px;
+        }
+    """
+    HOVER_STYLE = """
+        QFrame {
+            background-color: #e9f2ff;
+            border: 1px solid #0052CC;
+            border-radius: 6px;
+            padding: 10px;
+        }
+    """
+
+    def __init__(self, event, on_click, parent=None):
+        super().__init__(parent)
+        self.activity_data = event
+        self.on_click = on_click
+        self._clickable = bool(event.get("task_id") or event.get("project_id"))
+        if self._clickable:
+            self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+
+        icon_label = QLabel(event["icon"])
+        icon_label.setStyleSheet("font-size: 18px;")
+        layout.addWidget(icon_label)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        message_label = QLabel(event["text"])
+        message_label.setWordWrap(True)
+        message_label.setStyleSheet("color: #172b4d; font-size: 13px;")
+        time_label = QLabel(event.get("time_label", ""))
+        time_label.setStyleSheet("color: #6b778c; font-size: 11px;")
+        text_layout.addWidget(message_label)
+        text_layout.addWidget(time_label)
+        layout.addLayout(text_layout, 1)
+
+        self.setStyleSheet(self.BASE_STYLE)
+
+    def mousePressEvent(self, event):
+        if (
+            self._clickable
+            and event.button() == Qt.MouseButton.LeftButton
+            and self.on_click
+        ):
+            self.on_click(self.activity_data)
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        if self._clickable:
+            self.setStyleSheet(self.HOVER_STYLE)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setStyleSheet(self.BASE_STYLE)
+        super().leaveEvent(event)
+
 
 class DashboardWidget(QWidget):
     def __init__(self, api_client):
@@ -175,13 +241,8 @@ class DashboardWidget(QWidget):
         """)
         
         self.activity_layout = QVBoxLayout(self.activity_frame)
-        
-        # Placeholder for activity items
-        placeholder_label = QLabel("No recent activity")
-        placeholder_label.setStyleSheet("color: #999; font-style: italic; padding: 20px;")
-        placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.activity_layout.addWidget(placeholder_label)
-        
+        self.activity_layout.setSpacing(10)
+
         parent_layout.addWidget(self.activity_frame)
     
     def setup_quick_actions(self, parent_layout):
@@ -216,34 +277,151 @@ class DashboardWidget(QWidget):
     def refresh_data(self):
         """Refresh dashboard data"""
         try:
-            # Get projects
             projects = self.api_client.get_projects()
             total_projects = len(projects) if projects else 0
-            
-            # Get tasks
-            tasks = self.api_client.get_tasks() 
+
+            tasks = self.api_client.get_tasks()
             active_tasks = 0
             completed_tasks = 0
-            
+
             if tasks:
                 active_tasks = len([t for t in tasks if t.get("status") in ["todo", "in_progress"]])
                 completed_tasks = len([t for t in tasks if t.get("status") == "done"])
-            
-            # Update stat cards
+
             self.total_projects_card.number_label.setText(str(total_projects))
             self.active_tasks_card.number_label.setText(str(active_tasks))
             self.completed_tasks_card.number_label.setText(str(completed_tasks))
-            
-            # For demo, set overdue to 0
             self.overdue_tasks_card.number_label.setText("0")
-            
+
+            self.update_recent_activity(projects, tasks)
+
         except Exception as e:
             print(f"Error refreshing dashboard: {e}")
-            # Set default values on error
             self.total_projects_card.number_label.setText("0")
-            self.active_tasks_card.number_label.setText("0") 
+            self.active_tasks_card.number_label.setText("0")
             self.completed_tasks_card.number_label.setText("0")
             self.overdue_tasks_card.number_label.setText("0")
+            self.update_recent_activity([], [])
+
+    def _clear_activity_layout(self):
+        while self.activity_layout.count():
+            item = self.activity_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def _format_activity_time(self, iso_str):
+        if not iso_str:
+            return ""
+        try:
+            dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+            return dt.strftime("%b %d, %Y %I:%M %p")
+        except (ValueError, TypeError):
+            return str(iso_str)[:16]
+
+    def _status_label(self, status):
+        return (status or "todo").replace("_", " ").title()
+
+    def _handle_activity_click(self, event):
+        task_id = event.get("task_id")
+        project_id = event.get("project_id")
+        project_name = event.get("project_name") or "Project"
+
+        try:
+            if task_id:
+                from .task_detail_dialog import TaskDetailDialog
+                dialog = TaskDetailDialog(self.api_client, int(task_id), self)
+                if dialog.exec():
+                    self.refresh_data()
+                return
+
+            if project_id:
+                main_window = self.window()
+                if hasattr(main_window, "show_project_kanban"):
+                    main_window.show_project_kanban(project_id, project_name)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"Could not open activity item:\n{exc}")
+
+    def update_recent_activity(self, projects, tasks):
+        self._clear_activity_layout()
+        events = []
+
+        for project in projects or []:
+            if project.get("created_at"):
+                events.append({
+                    "timestamp": project["created_at"],
+                    "text": f"Project created: {project.get('name', 'Untitled')}",
+                    "icon": "📁",
+                    "project_id": project.get("id"),
+                    "project_name": project.get("name", "Project"),
+                })
+
+        for task in tasks or []:
+            task_id = task.get("id")
+            title = task.get("title", "Untitled")
+            created_at = task.get("created_at")
+            updated_at = task.get("updated_at")
+            status = self._status_label(task.get("status"))
+            project_id = task.get("project_id")
+
+            if created_at:
+                events.append({
+                    "timestamp": created_at,
+                    "text": f"Task created: PM-{task_id} {title}",
+                    "icon": "📝",
+                    "task_id": task_id,
+                    "project_id": project_id,
+                })
+
+            if updated_at and updated_at != created_at:
+                events.append({
+                    "timestamp": updated_at,
+                    "text": f"Task updated: PM-{task_id} {title} → {status}",
+                    "icon": "🔄",
+                    "task_id": task_id,
+                    "project_id": project_id,
+                })
+
+        recent_tasks = sorted(
+            tasks or [],
+            key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+            reverse=True,
+        )[:8]
+        for task in recent_tasks:
+            comments = self.api_client.get_task_comments(task["id"])
+            for comment in comments:
+                author_info = comment.get("author") or {}
+                author = author_info.get("full_name") or author_info.get("username") or "Someone"
+                body = (comment.get("body") or "").strip()
+                attachments = comment.get("attachments") or []
+                if not body and attachments:
+                    body = f"[{len(attachments)} attachment(s)]"
+                elif len(body) > 80:
+                    body = body[:77] + "..."
+                events.append({
+                    "timestamp": comment.get("created_at"),
+                    "text": f"{author} commented on PM-{task['id']}: {body or '(comment)'}",
+                    "icon": "💬",
+                    "task_id": task["id"],
+                    "project_id": task.get("project_id"),
+                })
+
+        events = [event for event in events if event.get("timestamp")]
+        events.sort(key=lambda item: item["timestamp"], reverse=True)
+        events = events[:5]
+
+        if not events:
+            placeholder = QLabel("No recent activity")
+            placeholder.setStyleSheet("color: #999; font-style: italic; padding: 20px;")
+            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.activity_layout.addWidget(placeholder)
+            return
+
+        for event in events:
+            event["time_label"] = self._format_activity_time(event["timestamp"])
+            self.activity_layout.addWidget(
+                ActivityRow(event, self._handle_activity_click, self)
+            )
     
     def create_new_project(self):
         # Signal to parent to show project creation

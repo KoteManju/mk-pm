@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
             page = current.data(Qt.ItemDataRole.UserRole)
             if page == "dashboard":
                 self.content_stack.setCurrentWidget(self.dashboard_widget)
+                self.dashboard_widget.refresh_data()
             elif page == "projects":
                 self.content_stack.setCurrentWidget(self.project_widget)
             elif page == "kanban":
@@ -217,7 +218,7 @@ class MainWindow(QMainWindow):
     
     def logout(self):
         self.logged_in = False
-        self.api_client.token = None
+        self.api_client.clear_auth()
         self.set_logged_out_state()
         
         QMessageBox.information(self, "Logout", "Logged out successfully!")
