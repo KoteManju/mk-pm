@@ -391,6 +391,17 @@ class TaskDetailDialog(QDialog):
         )
         activity_header.addWidget(self.comments_tab)
         activity_header.addStretch()
+
+        export_pdf_btn = QPushButton("Export PDF")
+        export_pdf_btn.setObjectName("ghost_btn")
+        export_pdf_btn.clicked.connect(self.export_chat_pdf)
+        activity_header.addWidget(export_pdf_btn)
+
+        export_doc_btn = QPushButton("Export Word")
+        export_doc_btn.setObjectName("ghost_btn")
+        export_doc_btn.clicked.connect(self.export_chat_docx)
+        activity_header.addWidget(export_doc_btn)
+
         self.comment_count_label = QLabel("0")
         self.comment_count_label.setStyleSheet("color: #626f86; font-size: 12px;")
         activity_header.addWidget(self.comment_count_label)
@@ -912,6 +923,88 @@ class TaskDetailDialog(QDialog):
             QMessageBox.information(self, "Updated", "Issue details updated.")
         else:
             QMessageBox.warning(self, "Error", "Failed to update issue details.")
+
+    def _export_chat_history(self, export_format: str):
+        if not self.task_data:
+            QMessageBox.warning(self, "Export", "Ticket details are not loaded yet.")
+            return
+
+        comments = self.api_client.get_task_comments(self.task_id)
+        if export_format == "pdf":
+            from src.services.chat_export import default_export_filename, export_chat_history_pdf
+
+            default_name = default_export_filename(self.task_data, "pdf")
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export chat history as PDF",
+                default_name,
+                "PDF files (*.pdf)",
+            )
+            if not path:
+                return
+            if not path.lower().endswith(".pdf"):
+                path += ".pdf"
+
+            try:
+                export_chat_history_pdf(
+                    path,
+                    self.task_data,
+                    comments,
+                    self.api_client.fetch_attachment_bytes,
+                )
+            except ImportError:
+                QMessageBox.warning(
+                    self,
+                    "Export",
+                    "PDF export requires reportlab.\n\nRun: pip install reportlab python-docx",
+                )
+                return
+            except Exception as exc:
+                QMessageBox.critical(self, "Export failed", f"Could not create PDF:\n{exc}")
+                return
+
+            QMessageBox.information(self, "Export complete", f"Chat history saved to:\n{path}")
+            return
+
+        from src.services.chat_export import default_export_filename, export_chat_history_docx
+
+        default_name = default_export_filename(self.task_data, "docx")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export chat history as Word document",
+            default_name,
+            "Word documents (*.docx)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".docx"):
+            path += ".docx"
+
+        try:
+            export_chat_history_docx(
+                path,
+                self.task_data,
+                comments,
+                self.api_client.fetch_attachment_bytes,
+            )
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Export",
+                "Word export requires python-docx.\n\nRun: pip install reportlab python-docx",
+            )
+            return
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", f"Could not create Word document:\n{exc}")
+            return
+
+        QMessageBox.information(self, "Export complete", f"Chat history saved to:\n{path}")
+
+    def export_chat_pdf(self):
+        self._export_chat_history("pdf")
+
+    def export_chat_docx(self):
+        self._export_chat_history("docx")
 
     def send_message(self):
         message = self.comment_input.toPlainText().strip()

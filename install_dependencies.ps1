@@ -78,7 +78,9 @@ function Install-DesktopDependencies {
     Write-Host "🖥️  Installing desktop app dependencies..."
     $packages = @(
         "PySide6",
-        "requests"
+        "requests",
+        "reportlab",
+        "python-docx"
     )
     
     foreach ($package in $packages) {

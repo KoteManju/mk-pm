@@ -57,7 +57,11 @@ class ActivityRow(QFrame):
             and event.button() == Qt.MouseButton.LeftButton
             and self.on_click
         ):
-            self.on_click(self.activity_data)
+            activity_data = dict(self.activity_data)
+            handler = self.on_click
+            QTimer.singleShot(0, lambda: handler(activity_data))
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def enterEvent(self, event):

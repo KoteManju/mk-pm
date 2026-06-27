@@ -205,8 +205,7 @@ class MainWindow(QMainWindow):
                 self,
                 "Backend update required",
                 "The backend server is out of date and does not support image attachments.\n\n"
-                "Close any old backend windows, then run start_backend.bat again.\n"
-                "After restart, http://127.0.0.1:8000/health should show attachments_enabled=true.",
+                "Update the server deployment, then verify /health shows attachments_enabled=true.",
             )
         
         # Refresh data in all widgets

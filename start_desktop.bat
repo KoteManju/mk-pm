@@ -22,7 +22,9 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Make sure the backend is running on http://127.0.0.1:8000
+echo Connects to the API URL in desktop\settings.json
+echo (default cloud server or http://127.0.0.1:8000 for local dev).
+echo Change it in the app under Settings if needed.
 echo.
 echo Login Credentials:
 echo   Username: admin

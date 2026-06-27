@@ -362,10 +362,14 @@ class APIClient:
 
     def check_backend_features(self) -> Dict[str, Any]:
         """Check if backend supports latest features."""
-        try:
-            response = requests.get(f"{self.base_url}/health", timeout=5)
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            print(f"Health check error: {e}")
+        url = f"{self.base_url}/health"
+        for attempt in range(2):
+            try:
+                response = requests.get(url, timeout=15)
+                if response.status_code == 200:
+                    return response.json()
+            except Exception as e:
+                if attempt == 0:
+                    continue
+                print(f"Health check warning: {e}")
         return {}
